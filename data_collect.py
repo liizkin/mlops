@@ -16,20 +16,15 @@ os.makedirs("data", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
 os.makedirs("reports", exist_ok=True)
 
-logging.basicConfig(
-    level=logging.INFO,
-    filename=LOG_PATH,
-    filemode='w',
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
 def create_batches_stream(df, batch_size, interval=0.1):
+    """создание батчей"""
     for i in range(0, len(df), batch_size):
         batch = df.iloc[i:i + batch_size]
         time.sleep(interval)
         yield batch
 
 def calculate_metadata(df, save_path=META_PATH):
+    """счет базовых метаданных"""
     try:
         meta = {
             "rows": len(df),

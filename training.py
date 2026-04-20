@@ -4,6 +4,7 @@ import os
 import json
 import joblib
 import logging
+import glob
 
 from datetime import datetime
 
@@ -17,25 +18,38 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 
 from sklearn.metrics import classification_report, roc_auc_score, f1_score
+from data_analysis import clean_data, feature_engineering
 
 RANDOM_STATE = 42
+
+def load_all_data(data_dir="data"):
+    all_files = glob.glob(os.path.join(data_dir, "*.csv"))
+    files = [f for f in all_files if "full_train.csv" not in f]
+
+    if not files:
+        raise ValueError("Нет файлов в папке data")
+
+    df_list = []
+    for file in files:
+        df_temp = pd.read_csv(file, low_memory=False)
+        df_list.append(df_temp)
+
+    df = pd.concat(df_list, ignore_index=True)
+    logging.info(f"Загружено исходных файлов: {len(files)}, строк: {df.shape[0]}")
+
+    return df
 
 # Обработка пропусков
 def handle_missing_values(df):
     df = df.copy()
-
     df["EFFECTIVE_YR"] = df["EFFECTIVE_YR"].fillna("unknown")
-
-    # бинаризация таргета
     df['CLAIM_PAID'] = df['CLAIM_PAID'].apply(lambda x: 'Yes' if x > 0 else 'No')
 
     logging.info("Пропуски обработаны")
     return df
 
-
 # Препроцессор
 def build_preprocessor():
-
     ohe_columns = ['SEX', 'TYPE_VEHICLE', 'MAKE', 'USAGE', 'EFFECTIVE_YR']
 
     num_columns = [
@@ -49,16 +63,20 @@ def build_preprocessor():
         ('ohe', OneHotEncoder(handle_unknown='ignore', drop='first'))
     ])
 
+    num_pipe = Pipeline([
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+
     preprocessor = ColumnTransformer(
         [
             ('ohe', ohe_pipe, ohe_columns),
-            ('num', StandardScaler(), num_columns)
+            ('num', num_pipe, num_columns)
         ],
         remainder='passthrough'
     )
 
     return preprocessor
-
 
 # Обучение моделей
 def train_models(X_train, y_train, preprocessor):
@@ -66,6 +84,7 @@ def train_models(X_train, y_train, preprocessor):
     pipeline_rf = Pipeline([
         ('preprocessor', preprocessor),
         ('model', RandomForestClassifier(
+            n_estimators=50,
             random_state=RANDOM_STATE,
             n_jobs=-1,
             class_weight='balanced'
@@ -133,7 +152,23 @@ def run_training_pipeline(df):
 
     df = handle_missing_values(df)
 
-    # разделение
+    # Загружаем все сырые данные из папки
+    full_df = load_all_data("data")
+    full_df = clean_data(full_df)
+    full_df = feature_engineering(full_df)
+    full_df = handle_missing_values(full_df)
+
+    full_df = pd.concat([full_df, df], ignore_index=True)
+
+    # убираем дубликаты
+    full_df = full_df.drop_duplicates()
+
+    # сохраняем объединённый датасет
+    os.makedirs("data", exist_ok=True)
+    full_df.to_csv("data/full_train.csv", index=False)
+
+    df = full_df
+
     X = df.drop(['CLAIM_PAID'], axis=1)
     y = df['CLAIM_PAID']
 
@@ -148,16 +183,14 @@ def run_training_pipeline(df):
 
     pipeline_rf, pipeline_mlp = train_models(X_train, y_train, preprocessor)
 
-    # оценка
     rf_metrics = evaluate_model(pipeline_rf, X_test, y_test, "RandomForest")
     mlp_metrics = evaluate_model(pipeline_mlp, X_test, y_test, "MLP")
 
-    # сохранение
     save_model_version(pipeline_rf, rf_metrics, "RF")
     save_model_version(pipeline_mlp, mlp_metrics, "MLP")
 
-    # выбор лучшей модели
     final_model = pipeline_rf if rf_metrics['roc_auc'] > mlp_metrics['roc_auc'] else pipeline_mlp
     joblib.dump(final_model, 'models/final_model.pkl')
+
     logging.info("Pipeline завершен")
     return final_model

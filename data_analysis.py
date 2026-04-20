@@ -2,10 +2,18 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import logging
+from mlxtend.frequent_patterns import apriori, association_rules
 
 
 class DataQualityEvaluator:
-
+    """
+    Метрики качества данных:
+    - completeness: пропуски
+    - validity: логические проверки
+    - timeliness: временные интервалы
+    - uniqueness: дубликаты
+    - accuracy: ограничения
+    """
     @staticmethod
     def completeness(df):
         df_bin = df.isna()
@@ -34,7 +42,7 @@ class DataQualityEvaluator:
         if "INSR_BEGIN" not in df.columns:
             return {"delta_time_max": None}
 
-        dates = pd.to_datetime(df["INSR_BEGIN"], errors="coerce")
+        dates = pd.to_datetime(df["INSR_BEGIN"], format='%d-%b-%y', errors="coerce")
         dates = dates.dropna().sort_values().unique()
 
         if len(dates) < 2:
@@ -54,8 +62,8 @@ class DataQualityEvaluator:
         checks = {}
 
         try:
-            begin = pd.to_datetime(df["INSR_BEGIN"], errors="coerce")
-            end = pd.to_datetime(df["INSR_END"], errors="coerce")
+            begin = pd.to_datetime(df["INSR_BEGIN"], format='%d-%b-%y', errors="coerce")
+            end = pd.to_datetime(df["INSR_END"], format='%d-%b-%y', errors="coerce")
             checks["date_order"] = float((end >= begin).mean())
         except:
             checks["date_order"] = None
@@ -89,26 +97,28 @@ def evaluate_data_quality(df):
 
 
 def clean_data(df):
+    """удаление пропусков в данных"""
     df = df.copy()
-
     # удаление дублей
     df = df.drop_duplicates()
     # фильтр аномалий
-    df = df[df['SEATS_NUM'] <= 100]
+    if 'SEATS_NUM' in df.columns:
+        df = df[df['SEATS_NUM'] <= 100]
     # числовые признаки
     numeric_cols = [
         'PREMIUM', 'INSURED_VALUE', 'SEATS_NUM',
         'CARRYING_CAPACITY', 'CCM_TON', 'PROD_YEAR'
     ]
     for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
         df[col] = df[col].fillna(df[col].median())
-    # CLAIM_PAID отдельно
-    df['CLAIM_PAID'] = df['CLAIM_PAID'].fillna(0)
+
+    df['CLAIM_PAID'] = pd.to_numeric(df['CLAIM_PAID'], errors='coerce').fillna(0)
 
     logging.info("Очистка данных завершена")
     return df
 
-# Outliers (IQR)
+# Межквартильный размах (IQR)
 def calculate_outliers(df, columns):
     report = {}
 
@@ -133,16 +143,17 @@ def calculate_outliers(df, columns):
 
 # Feature Engineering
 def feature_engineering(df):
+    """извлечение временных признаков"""
     df = df.copy()
 
-    df['INSR_BEGIN'] = pd.to_datetime(df['INSR_BEGIN'], errors="coerce")
-    df['INSR_END'] = pd.to_datetime(df['INSR_END'], errors="coerce")
+    df['INSR_BEGIN'] = pd.to_datetime(df['INSR_BEGIN'], format='%d-%b-%y', errors="coerce")
+    df['INSR_END'] = pd.to_datetime(df['INSR_END'], format='%d-%b-%y', errors="coerce")
 
     df['INSR_DURATION_DAYS'] = (df['INSR_END'] - df['INSR_BEGIN']).dt.days
     df['INSR_BEGIN_YEAR'] = df['INSR_BEGIN'].dt.year
     df['INSR_BEGIN_MONTH'] = df['INSR_BEGIN'].dt.month
 
-    df = df.drop(columns=['INSR_BEGIN', 'INSR_END', 'OBJECT_ID'])
+    df = df.drop(columns=[col for col in ['INSR_BEGIN', 'INSR_END', 'OBJECT_ID'] if col in df.columns])
 
     logging.info("Feature engineering завершен")
     return df
@@ -158,12 +169,25 @@ def calculate_correlations(df):
     logging.info("Корреляции рассчитаны")
     return corr
 
+def run_apriori(df):
+    df_bin = df.copy()
+    df_bin['HIGH_PREMIUM'] = (df_bin['PREMIUM'] > df_bin['PREMIUM'].median()).astype(bool)
+    df_bin['HIGH_CLAIM'] = (df_bin['CLAIM_PAID'] > 0).astype(bool)
+    df_bin['NEW_CAR'] = (df_bin['PROD_YEAR'] > 2015).astype(bool)
+
+    cols = ['HIGH_PREMIUM', 'HIGH_CLAIM', 'NEW_CAR']
+    df_bin = df_bin[cols]
+
+    freq = apriori(df_bin, min_support=0.1, use_colnames=True)
+    rules = association_rules(freq, metric="confidence", min_threshold=0.5)
+
+    return rules.head(5).to_dict(orient="records")
+
 def run_analysis(df):
     logging.info("Старт анализа данных")
 
+    df_clean = clean_data(df) 
     quality = evaluate_data_quality(df)
-
-    df_clean = clean_data(df)
 
     outliers = calculate_outliers(
         df_clean,
@@ -172,13 +196,14 @@ def run_analysis(df):
     )
 
     df_features = feature_engineering(df_clean)
-
+    rules = run_apriori(df_clean)
     corr = calculate_correlations(df_features)
-
+            
     logging.info("Анализ завершен")
 
     return {
         "quality": quality,
         "outliers": outliers,
-        "correlation": corr
+        "correlation": corr.to_dict(),
+        "rules": rules
     }
