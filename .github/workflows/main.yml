@@ -27,7 +27,7 @@ jobs:
         run: |
             python run.py -mode update
         env:
-            ITERATIONS: 10
+            ITERATIONS: 1
             
       - name: Run summary
         run: |
