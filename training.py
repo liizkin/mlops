@@ -20,9 +20,6 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report, roc_auc_score, f1_score
 from data_analysis import clean_data, feature_engineering
 
-import logging
-logger = logging.getLogger(__name__)
-
 RANDOM_STATE = 42
 
 def load_all_data(data_dir="data"):
@@ -38,7 +35,7 @@ def load_all_data(data_dir="data"):
         df_list.append(df_temp)
 
     df = pd.concat(df_list, ignore_index=True)
-    logger.info(f"Загружено исходных файлов: {len(files)}, строк: {df.shape[0]}")
+    logging.info(f"Загружено исходных файлов: {len(files)}, строк: {df.shape[0]}")
 
     return df
 
@@ -48,7 +45,7 @@ def handle_missing_values(df):
     df["EFFECTIVE_YR"] = df["EFFECTIVE_YR"].fillna("unknown")
     df['CLAIM_PAID'] = df['CLAIM_PAID'].apply(lambda x: 'Yes' if x > 0 else 'No')
 
-    logger.info("Пропуски обработаны")
+    logging.info("Пропуски обработаны")
     return df
 
 # Препроцессор
@@ -106,7 +103,7 @@ def train_models(X_train, y_train, preprocessor):
     pipeline_rf.fit(X_train, y_train)
     pipeline_mlp.fit(X_train, y_train)
 
-    logger.info("Модели обучены")
+    logging.info("Модели обучены")
 
     return pipeline_rf, pipeline_mlp
 
@@ -151,7 +148,7 @@ def save_model_version(pipeline, metrics, model_type):
 # Основной pipeline
 def run_training_pipeline(df, iterations):
 
-    logger.info("Старт подготовки данных")
+    logging.info("Старт подготовки данных")
 
     df = handle_missing_values(df)
 
@@ -195,5 +192,5 @@ def run_training_pipeline(df, iterations):
     final_model = pipeline_rf if rf_metrics['roc_auc'] > mlp_metrics['roc_auc'] else pipeline_mlp
     joblib.dump(final_model, 'models/final_model.pkl')
 
-    logger.info("Pipeline завершен")
+    logging.info("Pipeline завершен")
     return final_model

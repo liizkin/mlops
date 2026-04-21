@@ -4,9 +4,6 @@ from datetime import datetime
 import logging
 from mlxtend.frequent_patterns import apriori, association_rules
 
-import logging
-logger = logging.getLogger(__name__)
-
 class DataQualityEvaluator:
     """
     Метрики качества данных:
@@ -94,7 +91,7 @@ def evaluate_data_quality(df):
         res = func(df)
         results.update({f"{name}_{k}": v for k, v in res.items()})
 
-    logger.info("Data quality оценка завершена")
+    logging.info("Data quality оценка завершена")
     return results
 
 
@@ -117,7 +114,7 @@ def clean_data(df):
 
     df['CLAIM_PAID'] = pd.to_numeric(df['CLAIM_PAID'], errors='coerce').fillna(0)
 
-    logger.info("Очистка данных завершена")
+    logging.info("Очистка данных завершена")
     return df
 
 # Межквартильный размах (IQR)
@@ -157,7 +154,7 @@ def feature_engineering(df):
 
     df = df.drop(columns=[col for col in ['INSR_BEGIN', 'INSR_END', 'OBJECT_ID'] if col in df.columns])
 
-    logger.info("Feature engineering завершен")
+    logging.info("Feature engineering завершен")
     return df
 
 # Correlation
@@ -168,7 +165,7 @@ def calculate_correlations(df):
     ]
 
     corr = df[numeric_cols].corr()
-    logger.info("Корреляции рассчитаны")
+    logging.info("Корреляции рассчитаны")
     return corr
 
 def run_apriori(df):
@@ -186,7 +183,7 @@ def run_apriori(df):
     return rules.head(5).to_dict(orient="records")
 
 def run_analysis(df):
-    logger.info("Старт анализа данных")
+    logging.info("Старт анализа данных")
 
     df_clean = clean_data(df) 
     quality = evaluate_data_quality(df)
@@ -201,7 +198,7 @@ def run_analysis(df):
     rules = run_apriori(df_clean)
     corr = calculate_correlations(df_features)
             
-    logger.info("Анализ завершен")
+    logging.info("Анализ завершен")
 
     return {
         "quality": quality,
