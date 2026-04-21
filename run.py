@@ -5,18 +5,18 @@ import os
 import json
 import joblib
 
-from data_collect import ingest_data
-from data_analysis import clean_data, feature_engineering
-from training import run_training_pipeline
-from data_analysis import run_analysis
-from training import handle_missing_values
-
 logging.basicConfig(
     level=logging.INFO,
     filename="logs/app.log",
     filemode='w',
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+from data_collect import ingest_data
+from data_analysis import clean_data, feature_engineering
+from training import run_training_pipeline
+from data_analysis import run_analysis
+from training import handle_missing_values
 
 MODEL_PATH = "models/final_model.pkl"
 iterations = int(os.getenv("ITERATIONS", 1))
@@ -43,7 +43,7 @@ def run_inference(file_path):
     os.makedirs("reports", exist_ok=True)
     df.to_csv(output_path, index=False)
 
-    print(f"Inference завершен: {output_path}")
+    logging.info("Inference завершен")
     return output_path
 
 def run_update():
@@ -56,14 +56,15 @@ def run_update():
         df = clean_data(df)
         df = feature_engineering(df)
 
-        run_training_pipeline(df, iterations)
+        run_training_pipeline(df)
 
         logging.info("Успешно обучен")
         logging.shutdown()
         return True
 
     except Exception as e:
-        print(f"Ошибка update: {e}")
+        logging.error(f"Ошибка update: {e}")
+        logging.shutdown()
         return False
 
 def run_summary():
@@ -96,7 +97,7 @@ def run_summary():
         with open(output_path, "w") as f:
             json.dump(report, f, indent=4)
 
-        print(f"Summary сохранен: {output_path}")
+        logging.info("Summary сохранен")
         return output_path
 
     except Exception as e:

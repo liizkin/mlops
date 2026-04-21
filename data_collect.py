@@ -5,6 +5,8 @@ import logging
 import json
 import os
 
+import logging
+logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5120
 DB_PATH = "data/motor_data.db"
@@ -40,11 +42,11 @@ def calculate_metadata(df, save_path=META_PATH):
         with open(save_path, "w") as f:
             json.dump(meta, f, indent=4)
 
-        logging.info("Метаданные успешно сохранены")
+        logger.info("Метаданные успешно сохранены")
         return meta
 
     except Exception as e:
-        logging.error(f"Ошибка при расчете метаданных: {e}")
+        logger.error(f"Ошибка при расчете метаданных: {e}")
         raise
 
 
@@ -53,31 +55,31 @@ def ingest_data(file_path):
     try:
         # Загрузка данных
         df = pd.read_csv(file_path)
-        logging.info(f"Файл загружен: {file_path}, shape={df.shape}")
+        logger.info(f"Файл загружен: {file_path}, shape={df.shape}")
 
         if df.empty:
             raise ValueError("Файл пустой")
 
         calculate_metadata(df)
         conn = sqlite3.connect(DB_PATH)
-        logging.info("Подключение к БД установлено")
+        logger.info("Подключение к БД установлено")
 
         df.head(0).to_sql('data', conn, if_exists='replace', index=False)
 
         for i, batch in enumerate(create_batches_stream(df, BATCH_SIZE, interval=0)):
             batch.to_sql('data', conn, if_exists='append', index=False)
-            logging.info(f'Батч #{i} загружен, размер={len(batch)}')
+            logger.info(f'Батч #{i} загружен, размер={len(batch)}')
 
         conn.commit()
-        logging.info("Данные успешно загружены в БД")
+        logger.info("Данные успешно загружены в БД")
 
         return df
 
     except Exception as e:
-        logging.error(f'Ошибка в ingest_data: {e}')
+        logger.error(f'Ошибка в ingest_data: {e}')
         raise
 
     finally:
         if conn:
             conn.close()
-            logging.info("Соединение с БД закрыто")
+            logger.info("Соединение с БД закрыто")
