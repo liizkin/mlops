@@ -19,6 +19,7 @@ logging.basicConfig(
 )
 
 MODEL_PATH = "models/final_model.pkl"
+iterations = int(os.getenv("ITERATIONS", 1))
 
 def run_inference(file_path):
     if not os.path.exists(MODEL_PATH):
@@ -55,9 +56,10 @@ def run_update():
         df = clean_data(df)
         df = feature_engineering(df)
 
-        run_training_pipeline(df)
+        run_training_pipeline(df, iterations)
 
-        print("Update успешно завершен")
+        logging.info("Успешно обучен")
+        logging.shutdown()
         return True
 
     except Exception as e:

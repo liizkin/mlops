@@ -146,7 +146,7 @@ def save_model_version(pipeline, metrics, model_type):
     print(f"Модель {model_type} сохранена: {model_path}")
 
 # Основной pipeline
-def run_training_pipeline(df):
+def run_training_pipeline(df, iterations):
 
     logging.info("Старт подготовки данных")
 
